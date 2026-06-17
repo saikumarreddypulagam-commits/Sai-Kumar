@@ -1,0 +1,31 @@
+name: Secure AWS Cloud Deployment
+
+on:
+  push:
+    branches:
+      - main  # Runs automatically when you push code here
+
+# Crucial permission block required for AWS OIDC authentication
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  DeployJob:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Download your repository code into the runner
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Log into AWS using your secure OIDC connection
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Step 3: Run AWS commands (Verify connection)
+      - name: Test Connection to AWS
+        run: |
+          aws sts get-caller-identity

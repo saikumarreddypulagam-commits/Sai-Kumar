@@ -1,33 +1,36 @@
-name: Secure AWS Cloud Deployment
+name: Fetch Cloud Data from AWS
 
 on:
   push:
     branches:
-      - main  # Runs automatically when you push code here
+      - main
 
-# Crucial permission block required for AWS OIDC authentication
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  DeployJob:
+  FetchDataJob:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Download your repository code into the runner
+      # Step 1: Initialize the runner environment
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Log into AWS using your secure OIDC connection
+      # Step 2: Authenticate securely with AWS using your IAM Role
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
-        audience: sts.amazonaws.com
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+          audience: ://amazonaws.com
 
-      # Step 3: Run AWS commands (Verify connection)
-      - name: Test Connection to AWS
+      # Step 3: Fetch the data file from AWS S3 and display it in the logs
+      - name: Download and Print Data from S3
         run: |
-          aws sts get-caller-identity
-
+          echo "==== Connecting to AWS S3 Bucket ===="
+          # Replace 'saikumar-cloud-data-bucket-2026' with your exact bucket name below
+          aws s3 cp s3://saikumar-cloud-data-bucket-2026/userdata.json downloaded_data.json
+          
+          echo "==== Displaying Retrieved Cloud Data ===="
+          cat downloaded_data.json

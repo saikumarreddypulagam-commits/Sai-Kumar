@@ -21,7 +21,7 @@ jobs:
       # Step 2: Log into AWS using your secure OIDC connection
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
-        audience: ://amazonaws.com
+        audience: sts.amazonaws.com
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}

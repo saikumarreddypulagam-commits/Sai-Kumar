@@ -1,4 +1,4 @@
-name: Fetch Cloud Data from AWS
+name: Deploy Website to AWS S3
 
 on:
   push:
@@ -10,14 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  FetchDataJob:
+  DeployWebJob:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Initialize the runner environment
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Authenticate securely with AWS using your IAM Role
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -25,12 +23,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           audience: ://amazonaws.com
 
-      # Step 3: Fetch the data file from AWS S3 and display it in the logs
-      - name: Download and Print Data from S3
+      - name: Upload Files to S3 Bucket
         run: |
-          echo "==== Connecting to AWS S3 Bucket ===="
-          # Replace 'saikumar-cloud-data-bucket-2026' with your exact bucket name below
-          aws s3 cp s3://saikumar-cloud-data-bucket-2026/userdata.json downloaded_data.json
-          
-          echo "==== Displaying Retrieved Cloud Data ===="
-          cat downloaded_data.json
+          # Replace 'your-bucket-name' with your actual bucket name
+          aws s3 sync . s3://your-bucket-name --exclude ".git/*" --exclude ".github/*"

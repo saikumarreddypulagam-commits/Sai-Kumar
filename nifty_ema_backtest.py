@@ -4,7 +4,7 @@ Production-Ready Backtrader Backtesting Script for Nifty Minute-Chart Datasets.
 
 Features:
 1. Datetime parsing and automated filtering for the years 2024 and 2025.
-2. EMA Crossover Strategy (EMA 20 & EMA 50).
+2. EMA CrossOver Strategy (EMA 20 & EMA 50).
 3. Advanced State Machine to handle continuous reversal execution using Bracket Orders.
 4. Dynamic Position Sizing risking exactly 5% of the total current portfolio value based on SL.
 5. Command Line Interface (CLI) for easy execution on remote/headless AWS cloud servers.
@@ -56,9 +56,9 @@ class NiftyMinuteCSVData(bt.feeds.GenericCSVData):
 # ==============================================================================
 # 2. STRATEGY LOGIC & STATE MACHINE (EMA CROSSOVER WITH BRACKET ORDERS)
 # ==============================================================================
-class EmaCrossoverBracketStrategy(bt.Strategy):
+class EmaCrossOverBracketStrategy(bt.Strategy):
     """
-    An enterprise-grade implementation of the EMA Crossover strategy.
+    An enterprise-grade implementation of the EMA CrossOver strategy.
     
     Uses Bracket Orders (Main, Stop Loss, and Take Profit) and an asynchronous
     state transition machine to manage position reversals safely and prevent 
@@ -69,7 +69,7 @@ class EmaCrossoverBracketStrategy(bt.Strategy):
         ('ema_slow', 50),       # Slow EMA period
         ('sl_points', 20.0),    # Fixed Stop Loss points
         ('tp_points', 35.0),    # Fixed Take Profit points
-        ('risk_pct', 0.05),     # 5% portfolio risk per trade
+        ('risk_pct', 0.001),    # 0.10% portfolio risk per trade
         ('lot_size', 1),        # Standard Nifty contract size (Adjust to 25/50 if trading futures)
         ('verbose', True),      # Enable/disable transaction logging
     )
@@ -84,7 +84,8 @@ class EmaCrossoverBracketStrategy(bt.Strategy):
         # Indicators
         self.ema20 = bt.indicators.EMA(self.data.close, period=self.params.ema_fast)
         self.ema50 = bt.indicators.EMA(self.data.close, period=self.params.ema_slow)
-        self.crossover = bt.indicators.Crossover(self.ema20, self.ema50)
+        self.crossover = bt.indicators.CrossOver(self.ema20, self.ema50)
+        self.ema200 = bt.indicators.ExponentialMovingAverage(self.data.close, period=200)
 
         # State tracking variables
         self.active_brackets = []  # Stores orders belonging to the current bracket [main, stop, limit]
@@ -169,7 +170,7 @@ class EmaCrossoverBracketStrategy(bt.Strategy):
         else:
             size = int(size)
 
-        return max(size, self.params.lot_size)
+        return self.params.lot_size
 
     def execute_bracket(self, direction):
         """Submits bracket orders with defined stop and profit targets."""
@@ -212,9 +213,9 @@ class EmaCrossoverBracketStrategy(bt.Strategy):
             self.pending_signal = None
             return
 
-        # 2. Crossover Signals Processing
-        if self.crossover[0] > 0:  # Fast EMA crossed above Slow EMA
-            self.log("SIGNAL DETECTED: Bullish EMA Crossover (EMA20 > EMA50)")
+        # 2. CrossOver Signals Processing
+        if self.crossover > 0 and self.data.close[0] > self.ema200[0]:  # Fast EMA crossed above Slow EMA
+            self.log("SIGNAL DETECTED: Bullish EMA CrossOver (EMA20 > EMA50)")
             
             if self.position.size < 0:
                 # Active short position needs to be reversed
@@ -226,8 +227,8 @@ class EmaCrossoverBracketStrategy(bt.Strategy):
                 # Flat: Enter immediately
                 self.execute_bracket('BUY')
 
-        elif self.crossover[0] < 0:  # Fast EMA crossed below Slow EMA
-            self.log("SIGNAL DETECTED: Bearish EMA Crossover (EMA20 < EMA50)")
+        elif self.crossover < 0 and self.data.close[0] < self.ema200[0] :  # Fast EMA crossed below Slow EMA
+            self.log("SIGNAL DETECTED: Bearish EMA CrossOver (EMA20 < EMA50)")
             
             if self.position.size > 0:
                 # Active long position needs to be reversed
@@ -294,7 +295,7 @@ def generate_demo_csv(filepath):
 # 4. EXECUTION PIPELINE & SUMMARY REPORT
 # ==============================================================================
 def run_backtest():
-    parser = argparse.ArgumentParser(description="Backtrader Nifty Minute EMA Crossover Strategy")
+    parser = argparse.ArgumentParser(description="Backtrader Nifty Minute EMA CrossOver Strategy")
     parser.add_argument('--csv', type=str, default=None, help='Path to your Nifty minute CSV file')
     parser.add_argument('--cash', type=float, default=10000000.0, help='Initial cash size (default: 10,000,000)')
     parser.add_argument('--lot_size', type=int, default=25, help='Sizing multiple or lot size constraints (default: 25)')
@@ -331,7 +332,7 @@ def run_backtest():
 
     # Attach Strategy & Parameters
     cerebro.addstrategy(
-        EmaCrossoverBracketStrategy,
+        EmaCrossOverBracketStrategy,
         lot_size=args.lot_size,
         verbose=args.verbose or demo_mode  # Always verbosely print if running on demo data
     )
@@ -344,7 +345,7 @@ def run_backtest():
 
     # Attach standard Backtrader Analyzers
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', timeframe=bt.TimeFrame.Minutes, annualize=True)
-    cerebro.addanalyzer(bt.analyzers.Drawdown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
     # Run Backtest
@@ -420,21 +421,5 @@ def run_backtest():
 
 if __name__ == '__main__':
     run_backtest()
-```
-eof
 
-### Summary of What Was Created
 
-* **Custom Dataset Parser (`NiftyMinuteCSVData`)**: Handled mapping custom formats from input CSV, reading Open, High, Low, Close, and Volume while restricting data to the required 2024–2025 range via Cerebro's built-in date boundary options.
-* **Continuous Reversal State Machine**: Implemented bracket logic using `buy_bracket` and `sell_bracket` inside a state-tracking algorithm. If an opposite crossover occurs while in an active trade, the strategy automatically:
-    1. Cancels any outstanding SL/TP orders from the previous bracket.
-    2. Sends a closing order to flatten the active position.
-    3. Queues up the opposite trade execution to seamlessly fire as a new bracket once the flat transition state completes on the next bar.
-* **Dynamic Sizing (`calculate_position_size`)**: Computed order size on each trigger to risk exactly 5% of your current floating portfolio value based on the fixed 20-point stop loss. Includes support for custom trading multiplier rules (e.g., standard lot size limits).
-* **Headless-ready Outputs**: Configured metrics calculation via Sharpe Ratio, Drawdown, and Trade Analyzers, emitting a fully textual performance summary with **no Matplotlib dependency** to prevent GUI display exceptions on your AWS server.
-* **Demo Run Feature**: If run without a `--csv` argument, the script generates a highly realistic synthetic minute-chart dataset for immediate validation and diagnostic checks.
-
-### Running on AWS Instance
-To run the backtest with your custom dataset, deploy the Python script and run:
-```bash
-python backtest_nifty_ema.py --csv /path/to/nifty_data.csv --cash 10000000 --lot_size 25 --verbose
